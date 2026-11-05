@@ -1,0 +1,141 @@
+index.html
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AMASA 2026 Attendance Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 500px;
+      margin: 25px auto;
+      padding: 15px;
+      text-align: center;
+      background: #f5f6f8;
+    }
+    h2 { color: #172b4d; }
+    select, input, button {
+      width: 100%;
+      padding: 13px;
+      margin: 8px 0;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+    button {
+      background: #172b4d;
+      color: white;
+      border: 0;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #reader {
+      width: 100%;
+      margin: 15px auto;
+    }
+    #message {
+      margin-top: 15px;
+      padding: 12px;
+      font-weight: bold;
+      background: white;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>AMASA 2026</h2>
+  <h3>Attendance Scanner</h3>
+
+  <label>Select Meeting Day</label>
+  <select id="day">
+    <option>Day 1</option>
+    <option>Day 2</option>
+    <option>Day 3</option>
+  </select>
+
+  <div id="reader"></div>
+
+  <h3>Manual Check-in</h3>
+  <input id="participantId" placeholder="Enter participant ID (e.g. AMASA26-001)">
+  <button onclick="manualCheckIn()">Record Attendance</button>
+
+  <div id="message">Ready to scan.</div>
+
+  <script>
+    const API_URL = "https://script.google.com/macros/s/AKfycbwJ21PgJBNYjFC1xAsr2J2eKk9sMMSBuWlqS29P3oIuwYrBVJcRF33YWTS7QxWqrAOZ4A/exec";
+
+    let scanner;
+    let processing = false;
+
+    function showMessage(message) {
+      document.getElementById("message").textContent = message;
+    }
+
+    function recordAttendance(id) {
+      if (processing) return;
+      processing = true;
+
+      const day = document.getElementById("day").value;
+      showMessage("Recording attendance...");
+
+      window.amasaCallback = function(result) {
+        showMessage(result.message || "Request completed.");
+        processing = false;
+        document.getElementById("participantId").value = "";
+
+        const oldScript = document.getElementById("apiRequest");
+        if (oldScript) oldScript.remove();
+        delete window.amasaCallback;
+      };
+
+      const script = document.createElement("script");
+      script.id = "apiRequest";
+      script.src = API_URL +
+        "?action=record&id=" + encodeURIComponent(id) +
+        "&day=" + encodeURIComponent(day) +
+        "&callback=amasaCallback";
+
+      script.onerror = function() {
+        showMessage("Could not connect. Please try again.");
+        processing = false;
+        script.remove();
+        delete window.amasaCallback;
+      };
+
+      document.body.appendChild(script);
+    }
+
+    function manualCheckIn() {
+      const id = document.getElementById("participantId").value.trim();
+      if (!id) {
+        showMessage("Please enter a participant ID.");
+        return;
+      }
+      recordAttendance(id);
+    }
+
+    async function startScanner() {
+      try {
+        scanner = new Html5Qrcode("reader");
+
+        await scanner.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 240, height: 240 } },
+          async function(decodedText) {
+            if (processing) return;
+            await scanner.stop();
+            recordAttendance(decodedText.trim());
+          }
+        );
+      } catch (error) {
+        showMessage("Camera could not start. Please allow camera access or use manual check-in.");
+      }
+    }
+
+    startScanner();
+  </script>
+
+</body>
+</html>
